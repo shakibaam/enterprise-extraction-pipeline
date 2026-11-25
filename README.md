@@ -1,6 +1,6 @@
 # on_the_fly_pipeline
 
-Finds the **people and organizations connected to a registered company**, with the source URL and a verbatim quote for every mention. It is the adopted "E6" setup, frozen as a reusable package (version 1.1.0). **Canada** is validated; the **US** profile is a draft that has not been tested.
+Finds the **people and organizations connected to a registered company**, with the source URL and a verbatim quote for every mention. Version 1.1.0. **Canada** is validated; the **US** profile is a draft that has not been tested.
 
 ```
 company ─► search ─► fetch ─► rerank ─► select ─► extract ─► verify ─► clean-up ─► verified.json
@@ -53,34 +53,23 @@ $PY -m on_the_fly_pipeline serve rerank --stop
 | Verify | `steps/verify.py` | Starts as soon as a page is extracted. All claims of the page in one call with the whole page: "does it state X has this relation to THIS company?" | `decisions.json` |
 | Clean-up | `steps/finalize.py` | Drops non-names, the company's own name and relation "other"; merges spellings; keeps only mentions whose own claim was confirmed | `final.json`, `verified.json` |
 
-There is no identity check: dropping it made no difference to precision, saved 1.5 s, and recovered 32 gold entities. Extraction and verification overlap (streaming).
+There is no separate identity check: the verifier's question covers namesakes. Extraction and verification overlap (streaming).
 
 ## Model profiles (`config/models.toml`)
 
-These results come from 83 companies on the same saved pages, all with the GPT Terra verifier (2026-11-20 to 11-23):
-- precision is from the Sonnet fact-check;
-- recall is gold entities found out of 132;
-- latency excludes retrieval.
+The extractor and the verifier are chosen by name; changing a model needs no code change.
 
-| Extractor | Median latency | Cost / company | Strict precision | Lenient precision | Recall |
-|---|---|---|---|---|---|
-| **`haiku_medium`** (default) | 4.6 s | $0.017 | 90.3% | 99.0% | 78 (59%) |
-| `haiku_off` | 2.7 s | $0.022 | 68.2% | 95.5% | 38 (29%) |
-| `haiku_low` | 3.9 s | $0.017 | 80.7% | 96.5% | 37 (28%) |
-| `qwen9b_local` | 3.1 s | $0.004* | 93.4% | 96.1% | 62 (47%) |
-| `gemini_flash_lite` | 6.4 s | $0.046 | 78.0% | 100% | 54 (41%) |
-| `gpt54_nano` | 7.2 s | $0.029 | 79.7% | 96.2% | 51 (39%) |
-| `gpt6_luna` | 6.4 s | $0.015 | 94.4% | 100% | 56 (42%) |
-| `terra_none` | 3.3 s | $0.105 | 100%† | 100%† | 73 (55%) |
-| `sonnet_low` | 2.8 s | $0.145 | 95.8%† | 100%† | 80 (61%) |
+| Extractor | Model |
+|---|---|
+| **`haiku_medium`** (default) | Claude Haiku 5.5, reasoning medium |
+| `haiku_off`, `haiku_low` | Claude Haiku 5.5, reasoning off / low |
+| `qwen9b_local` | Qwen3.5-9B on the local GPUs (free); start it with `serve llm --profile qwen9b_local` |
+| `gemini_flash_lite` | Gemini 3.1 Flash Lite |
+| `gpt54_nano`, `gpt6_luna` | GPT-5.4 Nano, GPT-6 Luna |
+| `terra_none` | GPT-6.1 Terra, no reasoning |
+| `sonnet_low` | Claude Sonnet 5.5, reasoning low |
 
-\* Verifier only; extraction runs on the local GPUs. † Partly judged (53/97 and 72/108 entities).
-
-**Verifiers:**
-- `terra_none` (default): GPT-6.1 Terra, no reasoning.
-- `sonnet_medium`: same precision, slower, about 4× the cost.
-
-The verifier adds about 1–2 s and $0.003–0.011 per company. After it, lenient precision is 95–100% for every extractor, so the extractor mainly sets **recall, latency and cost**.
+**Verifiers:** `terra_none` (default; GPT-6.1 Terra, no reasoning) and `sonnet_medium` (Claude Sonnet 5.5).
 
 **Adding a model:** add an `[extractors.<name>]` or `[verifiers.<name>]` table. A local model also needs a `[serve]` table.
 
@@ -94,7 +83,7 @@ Each profile holds everything country-specific, merged over `config/default.toml
 - the prompts (`prompts/<code>/`);
 - jurisdiction codes (e.g. `CA-BC` → British Columbia).
 
-**`ca.toml` (validated)** reproduces the earlier behaviour exactly.
+**`ca.toml` (validated)**.
 
 **`us.toml` (draft, untested):**
 - state-based Secretary of State queries;
@@ -151,20 +140,15 @@ evaluate/       judge.py (Sonnet fact-check), recall.py, quotes.py
 tests/          test_units.py (39 tests), check_equivalence.py and check_rerank.py (need this machine's data)
 ```
 
-## Checks
+## Tests
 
-- **Unit tests:** 39 / 39 pass (`pytest on_the_fly_pipeline/tests/test_units.py`).
-- **Equivalence with E6** (83 companies, no paid calls):
-  - 1,504 / 1,504 extraction messages byte-identical;
-  - 161 / 161 verifier decisions identical;
-  - `final.json` identical.
-- **Rerank and select on the GPUs:** 62 / 62 companies keep the same pages.
-- **Not run yet:** a paid live end-to-end test, and any US run.
+- `pytest on_the_fly_pipeline/tests/test_units.py`: unit tests (no network, no GPU).
+- `tests/check_equivalence.py` and `tests/check_rerank.py`: regression checks against saved runs. They need this machine's data, and the rerank check also needs the GPUs.
 
-## Differences from E6 and known limits
+## Known limits
 
-- **Stricter confirmed filter.** A mention is kept only if its *own* claim was confirmed. E6 matched on URL plus quote, so a rejected claim could ride on another entity's confirmed claim from the same sentence. On E6's data this removes 1 entity (Everett Lord: gold, but his own claim was rejected) and 1 mention. Recall goes from 78 to 77; strict precision from 90.3% to 91.2%.
-- **Search provider.** All measured results used Keenable pages, but Serper is the default. Use `--provider keenable` or `--from-saved` to compare like for like.
-- **No spending caps by default.** A reply that costs more than its reserved estimate can pass an optional cap by at most that difference.
-- **PDFs are not parsed** (only their snippets), as in every measured run.
+- **Search provider.** Serper is the default; Keenable is available with `--provider keenable`. Results depend on the pages each returns.
+- **Optional caps.** A reply that costs more than its reserved estimate can pass a cap by at most that difference.
+- **PDFs are not parsed** (only their search snippets are used).
+- **US profile** is untested, and its location check is off.
 - **The name matcher treats "canada" as a generic word** for every country.

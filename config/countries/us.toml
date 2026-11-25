@@ -1,0 +1,108 @@
+# Country profile: UNITED STATES. *** DRAFT, UNTESTED (2026-11-24) ***
+# Written so that the pipeline is ready for US registries; nothing here has been run or measured. Before trusting a US run: check the
+# queries on a sample (search results), the foreign-site lists, and precision/recall with the judge. The location check is OFF: there
+# is no US location locale yet (shared/foreign_pages.py has only "ca"); write one (home signals: states, ZIP codes; foreign: Canada, UK, ...)
+# and turn it on. Prompts in prompts/us/ are the Canadian ones with "Canadian" -> "US" and "province" explained as the state.
+code = "US"
+name = "United States"
+status = "draft"
+region_label = "state"
+
+[jurisdictions]
+"US-AL" = "Alabama"
+"US-AK" = "Alaska"
+"US-AZ" = "Arizona"
+"US-AR" = "Arkansas"
+"US-CA" = "California"
+"US-CO" = "Colorado"
+"US-CT" = "Connecticut"
+"US-DE" = "Delaware"
+"US-DC" = "District of Columbia"
+"US-FL" = "Florida"
+"US-GA" = "Georgia"
+"US-HI" = "Hawaii"
+"US-ID" = "Idaho"
+"US-IL" = "Illinois"
+"US-IN" = "Indiana"
+"US-IA" = "Iowa"
+"US-KS" = "Kansas"
+"US-KY" = "Kentucky"
+"US-LA" = "Louisiana"
+"US-ME" = "Maine"
+"US-MD" = "Maryland"
+"US-MA" = "Massachusetts"
+"US-MI" = "Michigan"
+"US-MN" = "Minnesota"
+"US-MS" = "Mississippi"
+"US-MO" = "Missouri"
+"US-MT" = "Montana"
+"US-NE" = "Nebraska"
+"US-NV" = "Nevada"
+"US-NH" = "New Hampshire"
+"US-NJ" = "New Jersey"
+"US-NM" = "New Mexico"
+"US-NY" = "New York"
+"US-NC" = "North Carolina"
+"US-ND" = "North Dakota"
+"US-OH" = "Ohio"
+"US-OK" = "Oklahoma"
+"US-OR" = "Oregon"
+"US-PA" = "Pennsylvania"
+"US-RI" = "Rhode Island"
+"US-SC" = "South Carolina"
+"US-SD" = "South Dakota"
+"US-TN" = "Tennessee"
+"US-TX" = "Texas"
+"US-UT" = "Utah"
+"US-VT" = "Vermont"
+"US-VA" = "Virginia"
+"US-WA" = "Washington"
+"US-WV" = "West Virginia"
+"US-WI" = "Wisconsin"
+"US-WY" = "Wyoming"
+
+[config.search]
+# DRAFT: US state filings live with each Secretary of State; "business entity search" is the usual name of those registries.
+queries = [
+  { id = "Q02", category = "registry", template = '"{name}" {region} secretary of state business entity' },
+  { id = "Q06", category = "contact",  template = '"{name}" {region} address contact' },
+  { id = "Q11", category = "registry", template = '"{name}" {region} public records' },
+]
+
+[config.search.serper]
+country = "us"
+language = "en"
+
+[config.rerank]
+country = "United States"
+
+[config.select.foreign_sites]
+# DRAFT: the Canadian lists turned around: non-US country domains (.ca included, .us excluded), Canadian registries and directories.
+enabled = true
+country_domains = [".ca", ".uk", ".nz", ".au", ".ie", ".in", ".za", ".sg", ".hk", ".ky", ".bs", ".bm", ".vg", ".de", ".fr", ".nl", ".be",
+                   ".ch", ".at", ".it", ".es", ".pt", ".pl", ".se", ".no", ".dk", ".fi", ".jp", ".cn", ".kr", ".tw", ".br", ".mx", ".ar",
+                   ".cl", ".ae", ".ph", ".my", ".pk", ".ng", ".ke", ".gh"]
+hosts = ["opengovca.com", "canadacompanyregistry.com", "ic.gc.ca", "ised-isde.canada.ca", "companiesnz.com",
+         "ukfirmiq.com"]
+path_countries = ["canada", "ca", "united-kingdom", "uk", "gb", "great-britain", "england", "scotland", "wales", "northern-ireland",
+                  "ireland", "new-zealand", "nz", "australia", "au", "india"]
+opencorporates_outside_canada = true      # the switch for the OpenCorporates rule (name kept for compatibility): pages outside the home
+opencorporates_home = "us"
+
+[config.select.location]
+enabled = false                           # no US locale yet (see the note at the top)
+locale = "us"
+foreign_min = 2
+overwhelming_min = 10
+overwhelming_ratio = 10
+same_site = true
+sole_proprietorship_other_province = false
+
+[config.extraction]
+prompt_file = "on_the_fly_pipeline/prompts/us/extract.txt"
+chunk_sizing_prompt_file = "on_the_fly_pipeline/prompts/us/chunk_sizing.txt"
+country = "United States"
+
+[config.verification]
+prompt_file = "on_the_fly_pipeline/prompts/us/verify.txt"
+registry_record_file = "on_the_fly_pipeline/prompts/us/registry_record.txt"

@@ -1,0 +1,21 @@
+You check claims that an automatic extractor made about a US registered company, using ONLY the web page below.
+
+{record}
+
+SOURCE PAGE: {url}
+Title: {title}
+<<<PAGE
+{page}
+PAGE>>>
+
+CLAIMS FROM THIS PAGE
+{claims}
+
+For each claim answer one question: does this page state that the named person or organization has the claimed relationship with the
+target company - with THIS registered company (not a different company with the same or a similar name, and not another party on the
+page), in the claimed direction? Answer "yes" only if the page states it; "no" otherwise (not stated, only implied, about another company,
+or the wrong direction). Dates and whether a role is current do not matter.
+Relationship meanings: director = board member; officer = a named corporate office (president, CEO, CFO, secretary, treasurer, VP);
+employee = anyone else working for it; shareholder or owner = holds shares or owns it; parent = owns or controls it (incl. an acquirer);
+subsidiary = a company it owns or controls; affiliate = under common control (not a mere partner, customer or supplier); predecessor =
+a company merged into it or whose business it took over; successor = took over its business; counsel or auditor = acting for it.

@@ -1,0 +1,10 @@
+# on_the_fly_pipeline dependencies (the only dependency list; pyproject.toml was removed 2026-11-25).
+# Install: pip install -r on_the_fly_pipeline/requirements.txt   (Python >= 3.11; the package runs in place from Provinces/)
+# Verified with requests 2.34 and transformers 5.17 (/home/shakiba/vllm-env).
+requests>=2.31        # search, fetch, OpenRouter and vLLM calls
+transformers>=4.40    # the Granite reranker's tokenizer (live retrieval only)
+# Optional:
+# pypdfium2>=4        # only if [fetch].parse_pdfs = true (off in every measured run)
+# pytest>=8           # tests/test_units.py
+# Not Python packages: vLLM (reranker and local LLM servers; /home/shakiba/vllm-env), an OpenRouter key, a Serper or Keenable key
+# (read by name from the environment or [secrets].env_file; see shared/config.py).

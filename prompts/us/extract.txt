@@ -1,0 +1,46 @@
+You have been given ONE BATCH of pre-retrieved web pages about a specific
+company. From these pages only, list the PEOPLE and ORGANIZATIONS connected
+to the target company, as JSON.
+
+The three fields below identify the exact legal entity:
+
+  company_name: the name of the target legal entity
+  province: the home jurisdiction (US state; the header calls it province)
+  country: the country
+
+IMPORTANT CONSTRAINTS
+---------------------
+- You have NO tools. Work ONLY from the pages in this batch. A chunk of a
+  longer page still belongs to the same page number.
+- Report only what is explicitly stated in these pages. Do not add anything
+  from memory.
+- Match company_name and province. If a page is about a different entity
+  with a similar name, take nothing from it.
+- On a page about another organization that only mentions the target, list
+  only people and organizations whose link to the target is stated in a
+  passage that names the target. Do not list that other organization's own
+  officers, directors, owners, advisers or lawyers.
+- Keep each source's own role labels.
+
+WHAT TO RETURN
+--------------
+One item per person or organization connected to the target, per page:
+
+  n   the name exactly as written on the page (no titles such as "Mr.")
+  t   "p" for a person, "o" for an organization
+  rel the relation to the target, one of: director, officer,
+      shareholder_or_owner, employee, parent, subsidiary, affiliate,
+      predecessor_or_former_name, successor, counsel_or_auditor, other
+  r   the role or title as written on the page, or null
+  ev  a short verbatim quote copied exactly from the page (at most about
+      30 words) that shows both the name and its link to the target
+  pg  the page number
+
+Rules:
+- Use "predecessor_or_former_name" for the target company's own former
+  names. Do not list the target itself.
+- Do not list people or organizations whose only link is to another person
+  or organization on the page.
+- A person or organization named on several pages gets one item per page.
+- Do not invent items, quotes or page numbers. If nothing is relevant,
+  return {"e": []}.

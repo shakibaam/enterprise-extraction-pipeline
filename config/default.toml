@@ -1,0 +1,150 @@
+# on_the_fly_pipeline default configuration (frozen 2026-11-24).
+# Retrieval ([search] [fetch] [rerank] [select]) and clean-up ([finalize]) are the A+E config that produced the saved pages and that the
+# adopted E6 pipeline used (enterprise_agent/results/experiments/e2e_stream_final_terra_20261120/config_snapshot_20261120/AE.toml), unchanged
+# except: [search].provider = "serper" (the saved pages came from Keenable; choose with --provider). The old [extract]/[verify]/[run] sections
+# (company_pipeline's own extractor) are replaced by [pipeline], [extraction] and [verification]; models live in config/models.toml.
+# COUNTRY-SPECIFIC settings (search queries and Google country, reranker country, foreign sites, location check, prompts) are NOT here:
+# they live in config/countries/<code>.toml and are merged over this file (--country, default CA). Options used only by company_pipeline's
+# standalone CLIs were removed (search.max_calls, fetch.company_workers, rerank.workers, select.workers, finalize.workers).
+# Paths are relative to the Provinces/ directory unless absolute.
+
+
+[secrets]
+# The .env file that holds API keys. Keys are read by name and never printed or copied.
+env_file = "enterprise_agent/.env"
+
+[search]
+# Which search API to use: "serper" or "keenable". Can be overridden on the command line (--provider).
+provider = "serper"          # on_the_fly_pipeline default; the saved pages of all E6-E14 runs came from "keenable"
+results_per_query = 10
+# Parallel API calls. All queries of all companies share one pool, so a company's queries run in parallel;
+# the provider's rate limit (min_interval_s below) is the real cap.
+query_workers = 32
+# Retries on HTTP 429, 5xx and network errors (other errors are not retried; see search.py).
+max_attempts = 3
+timeout_s = 60
+# On HTTP 429 the gap between calls is doubled, up to this many seconds (adapts to an unknown plan limit).
+max_interval_s = 2.0
+
+[search.serper]
+endpoint = "https://google.serper.dev/search"
+api_key_name = "SERPER_API_KEY"
+# Plan limit unknown: start at 20 calls/s; the limiter slows down by itself on HTTP 429.
+min_interval_s = 0.05
+
+[search.keenable]
+endpoint = "https://api.keenable.ai/v1/search"
+api_key_name = "KEENABLE_API_KEY"
+snippet_max_length = 180
+# Keenable allows 10 requests per second per organization.
+min_interval_s = 0.1
+
+[fetch]
+# Parallel downloads. All URLs of all companies share one pool; per-website limits below keep us polite.
+workers = 64
+connect_timeout_s = 10
+read_timeout_s = 30          # longest wait for the next bytes (the earlier runs used 30 s)
+max_seconds_per_page = 60    # whole download, so a slow trickle can't hold a worker
+max_bytes = 1500000          # keep the first 1.5 MB of the body (same as the earlier runs)
+max_redirects = 30
+min_text_chars = 80          # less text than this counts as failed (same as the earlier runs)
+max_attempts = 2             # retries only on timeout, connection error, 429 and 5xx
+max_retry_wait_s = 10
+user_agent = "Mozilla/5.0 (compatible; ResearchBot/1.0)"
+per_host_concurrency = 4     # requests at once to one website
+per_host_min_interval_s = 0.25
+host_failure_limit = 5       # timeouts/connection errors in a row before a website is skipped for the rest of the run
+snippet_fallback = true      # keep the search snippets when a page can't be used
+# PDFs. false (default): not downloaded or parsed, the search snippet is kept, as in the earlier runs (latency: parsed PDFs held 71% of the
+# kept text in the BC80 end-to-end run). true: parsed with pypdfium2 in a separate process (pipeline/pdf_text.py), with the settings below.
+parse_pdfs = false
+max_pdf_bytes = 30000000     # 30 MB; a larger PDF is cut and can't be read (pdf_too_large)
+pdf_max_seconds = 120        # whole PDF download
+pdf_workers = 8              # PDFs parsed at once (CPU)
+pdf_timeout_s = 60           # parsing time per PDF (the slowest of 37 test PDFs took 11 s)
+pdf_max_pages = 0            # 0 = all pages
+pdf_python = ".venv/bin/python"   # interpreter for the PDF child process (has pypdfium2); the pipeline itself may run in another
+
+[rerank]
+# Which reranker: one of the [rerank.profiles.<name>] sections below (can be overridden with --profile).
+profile = "granite"
+# vLLM servers (python -m on_the_fly_pipeline serve rerank starts one per GPU on port base_port + GPU index).
+servers = ["http://localhost:8020", "http://localhost:8021"]
+base_port = 8020
+max_inputs_per_post = 512    # a company with more inputs is sent in several posts
+timeout_s = 900
+max_attempts = 3             # on connection errors, timeouts and 5xx (next server each time)
+retry_wait_s = 5
+server_failure_limit = 5     # companies in a row that can't reach the servers before the run stops
+name_filter = true           # don't score pages that don't name the company (select drops them anyway; same pages kept, far fewer tokens)
+
+# One profile per reranker model. Fields:
+#   model, tokenizer (default: model)       Hugging Face names
+#   input_format                             "pair" (cross-encoder) or "template" (one prompt text with {query} and {document})
+#   max_tokens                               longest request (query + header + page); longer pages are chunked
+#   score_index                              which of vLLM's /classify probs is the score
+#   threshold                                select keeps pages with score >= threshold (tune it for each model)
+#   query                                    {name}, {province}, {country}
+#   document_header                          put before the page text; {title}, {url}
+#   template, add_special_tokens             "template" format only
+#   [.serve]                                 vLLM server settings (serve.py)
+
+[rerank.profiles.granite]
+# Validated: Granite (vLLM) + Qwen3.5-9B, BC80 (enterprise_variant_d/runs/pipeline_granite9b_bc80_20261112).
+model = "ibm-granite/granite-embedding-reranker-english-r2"
+input_format = "pair"
+max_tokens = 8192
+score_index = 0
+threshold = 0.82             # tuned 0.819893 on BC80, rounded (0.8 kept more pages and tokens: 3.3 M vs 1.8 M prompt tokens on the same pages)
+query = "Target company: {name} ({province}, {country}). Who are the directors, officers, owners and employees of {name}, and which companies own it, are owned by it, acquired it, were acquired by it, or merged or amalgamated with it?"
+document_header = "Title: {title}\nURL: {url}\n\n"
+
+[rerank.profiles.granite.serve]
+gpus_per_server = 1          # one server per GPU, on port base_port + GPU index
+# max-model-len = max_tokens + 256: a request exactly at max-model-len hangs in vLLM 0.31.
+args = ["--runner", "pooling", "--dtype", "bfloat16", "--max-model-len", "8448", "--max-num-batched-tokens", "32768"]
+gpu_memory_utilization = 0.09
+env = { VLLM_ALLOW_LONG_MAX_MODEL_LEN = "1" }
+
+[select]
+# Website-address name test: "first_word" (the name's first distinctive word in the host) or "words" (also the name's other,
+# non-generic words in the host, URL path, title or text). "words" removed the snowlake.ca pages of SNOW LAKE SPORTSMAN ASSOCIATION
+# (41 unrelated names) and kept shell.ca / asmlaw.ca (pipeline/names.py). Also used by rerank's name test. "words" since 2026-11-13: on the
+# three corptrace samples strict precision 60.9% -> 72.0% (enterprise_variant_d/runs/host_cap_test_20261113).
+host_rule = "words"
+
+[finalize]
+# Clean-up rules are fixed in steps/finalize.py (drop near-target items, items without a source URL, the company's own name, items that are not
+# names such as e-mails, addresses, roles and documents; merge duplicates). Then the switches below:
+person_linked = true             # drop entities linked only to another extracted person (the owner's other jobs, boards, memberships)
+drop_other_unnamed = true       # change B (2026-11-15): drop relation type "other" unless its evidence names the target
+canonicalize = true             # change C (2026-11-15, steps/finalize.py): drop non-entities, merge aliases, drop aliases of the target
+drop_other = true               # 2026-11-15 (with relation types): drop every item of relation type "other"
+restrict_not_about = true       # 2026-11-15 (with [extract.identity_gate] ask_about): items from pages the gate marked "about": "no" are kept only if their evidence names the target
+abstain_bad_share = 0.75         # no people/organizations when >= this share of the pages are foreign by location or judged "other"/"unclear"; 0 = off
+normalize_names = true
+
+
+[pipeline]
+company_workers = 8          # companies processed at once (each runs search -> ... -> clean-up on its own; pools below are shared)
+extract_workers = 64         # extraction requests in flight, all companies together (as E6)
+verify_workers = 32          # verifier requests in flight (as E6)
+progress_interval_s = 30
+
+[extraction]
+# E6 settings (prompt files and the header's country: in the country profile). One request per selected page; a page longer than batch_tokens is split into pieces (chars / 2.8 tokens).
+extractor = "haiku_medium"           # a profile in config/models.toml (override: --extractor)
+batch_tokens = 6000
+[verification]
+# E6 verifier (prompt and registry-record files: in the country profile) (V5): one question per claim, all claims of a page in one call, the whole page (up to max_page_chars) as context, no web.
+# A claim is confirmed when the model says "yes" and the name passes the code check (person: two name words, no digits; no dates).
+verifier = "terra_none"              # a profile in config/models.toml (override: --verifier)
+max_page_chars = 540000              # longer pages: the first 20,000 characters + 4,000 around each claimed name
+skip_relation = "other"              # claims of this relation are not sent (finalize drops them anyway)
+
+[io]
+# Input and output formats (storage/). Implemented today: input jsonl | csv | tsv ("auto" = by file extension); output json.
+# Registered as planned (choosing one stops the run with a message until written): input json | database; output jsonl | csv | database.
+# Whatever the output format, the working files in OUT/<slug>/ (search, fetch, pages, rerank, select, extract, final) stay JSON.
+input_format = "auto"
+output_format = "json"

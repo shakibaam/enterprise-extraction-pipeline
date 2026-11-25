@@ -1,0 +1,79 @@
+# Country profile: CANADA (validated; every measured result of this pipeline used it). Selected with --country CA (the default).
+# Everything country-specific lives here; [config.*] tables are merged over config/default.toml. Moved here unchanged on 2026-11-24 from
+# default.toml (= the A+E config used by E6), so a CA run resolves to exactly the settings it had before country profiles existed.
+code = "CA"
+name = "Canada"
+status = "validated"
+region_label = "province"            # what Company.province holds for this country
+
+# Input: corptrace "jurisdiction" codes of this country -> region name (a plain CSV/JSONL row gives province and an optional country).
+[jurisdictions]
+"CA-AB" = "Alberta"
+"CA-BC" = "British Columbia"
+"CA-MB" = "Manitoba"
+"CA-NB" = "New Brunswick"
+"CA-NL" = "Newfoundland and Labrador"
+"CA-NS" = "Nova Scotia"
+"CA-NT" = "Northwest Territories"
+"CA-NU" = "Nunavut"
+"CA-ON" = "Ontario"
+"CA-PE" = "Prince Edward Island"
+"CA-QC" = "Quebec"
+"CA-SK" = "Saskatchewan"
+"CA-YT" = "Yukon"
+
+[config.search]
+# Query templates. {name} = the company's legal name (kept in quotes), {province} or {region} = its province.
+# Same templates as the earlier runs (General-12 set, Q02, Q06, Q11); Q10 removed.
+queries = [
+  { id = "Q02", category = "registry", template = '"{name}" {province} corporate registry' },
+  { id = "Q06", category = "contact",  template = '"{name}" {province} address contact' },
+  { id = "Q11", category = "registry", template = '"{name}" {province} public records' },
+]
+
+[config.search.serper]
+country = "ca"      # gl
+language = "en"     # hl
+
+[config.rerank]
+country = "Canada"  # in the reranker query: "Target company: {name} ({province}, {country}). Who are the directors ..."
+
+[config.select.foreign_sites]
+# Pages on websites about companies outside Canada are not scored by rerank and are dropped by select (reason "foreign_site"):
+# same-name companies elsewhere made 47 of 91 clearly unrelated names on the corptrace sample, and no related one (shared/foreign_pages.py).
+enabled = true
+# Non-Canadian country-code domains (generic ones such as .co, .io, .ai, .me, .tv are not listed: used by any country).
+country_domains = [".uk", ".us", ".nz", ".au", ".ie", ".in", ".za", ".sg", ".hk", ".ky", ".bs", ".bm", ".vg", ".de", ".fr", ".nl", ".be",
+                   ".ch", ".at", ".it", ".es", ".pt", ".pl", ".se", ".no", ".dk", ".fi", ".jp", ".cn", ".kr", ".tw", ".br", ".mx", ".ar",
+                   ".cl", ".ae", ".ph", ".my", ".pk", ".ng", ".ke", ".gh"]
+# Foreign registries and company directories on generic domains (a host also matches its subdomains).
+hosts = ["sunbiz.org", "bizapedia.com", "corporationwiki.com", "opengovus.com", "opencorpdata.com", "uspto.gov", "trademarkia.com",
+         "trademarks.justia.com", "companiesnz.com", "nhcompanyregistry.com", "opendatalacity.com", "ukfirmiq.com", "commerceflorida.com"]
+# Foreign countries as a whole URL path segment, for sites that cover many countries (govintel.ai/united-kingdom/..., bbb.org/us/...).
+# Not "in": that is LinkedIn's profile path (linkedin.com/in/<name>).
+path_countries = ["united-kingdom", "uk", "gb", "great-britain", "england", "scotland", "wales", "northern-ireland", "ireland", "us", "usa",
+                  "united-states", "new-zealand", "nz", "australia", "au", "india"]
+# OpenCorporates company pages outside the home country (/companies/<jurisdiction> whose first two letters are not opencorporates_home).
+opencorporates_outside_canada = true
+opencorporates_home = "ca"
+
+[config.select.location]
+# Location check of the pages that would be kept (shared/foreign_pages.py, locale "ca"): drop pages that place their business outside Canada, by
+# addresses, US states, UK postcodes and phrases ("foreign_location"), and for sole proprietorships pages that name only another province
+# ("other_province"). Sample 2 of corptrace: strict precision 40.9% -> 58.7%, recall unchanged (enterprise_variant_d/runs/location_check_20261113).
+enabled = true
+locale = "ca"
+foreign_min = 2                  # foreign score needed when the page has no Canadian signal
+overwhelming_min = 10            # ... or this foreign score and
+overwhelming_ratio = 10          # ... this many times the Canadian count
+same_site = true                 # drop the other kept pages of a website with a dropped page, unless one names the company's province
+sole_proprietorship_other_province = true
+
+[config.extraction]
+prompt_file = "on_the_fly_pipeline/prompts/ca/extract.txt"            # = haiku55_1stage_83co_reason_20261120/prompts/merged_json.txt
+chunk_sizing_prompt_file = "on_the_fly_pipeline/prompts/ca/chunk_sizing.txt"   # = terra_2stage_60co_reason_20261116/prompts/stage1_notes.txt
+country = "Canada"                   # the "country" line of the company header in every extraction request
+
+[config.verification]
+prompt_file = "on_the_fly_pipeline/prompts/ca/verify.txt"
+registry_record_file = "on_the_fly_pipeline/prompts/ca/registry_record.txt"

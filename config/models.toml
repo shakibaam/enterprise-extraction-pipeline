@@ -1,0 +1,140 @@
+# Model profiles for on_the_fly_pipeline. Pick one with [extraction].extractor / [verification].verifier in default.toml, or with
+# --extractor / --verifier on the command line. Adding a model = adding a profile here; no code change.
+#
+# Fields (all profiles)
+#   endpoint        "openrouter" (paid, key from enterprise_agent/.env via resolve_openrouter_api_key) or "local" (a vLLM server, free)
+#   base_url        local only: the server's OpenAI-compatible URL
+#   model           model name as the endpoint knows it
+#   reasoning       optional table sent as "reasoning" (OpenRouter): { effort = "medium" | "low" | "none" } or { enabled = false }
+#   temperature     optional (Claude 5.5 models do not accept it on OpenRouter)
+#   max_tokens      output cap of the first attempt
+#   length_retry_max_tokens   optional: when a reply is cut off at max_tokens, the retry uses this cap (local Qwen: 4096 -> 12000)
+#   extra_body      optional extra request fields (provider routing, Qwen's thinking switch)
+#   prompt_cache    true: the fixed extraction prompt is sent as a cached block (Anthropic cache_control; others ignore or cache by prefix)
+#   price_in, price_out   USD per million tokens, used only for budget RESERVES (spend = the usage.cost OpenRouter reports)
+#   [.serve]        local only: vLLM server settings for python -m on_the_fly_pipeline serve llm
+#
+# Measured on the same 83 companies / saved Keenable pages, Terra verifier (2026-11-20..23; see README "Model comparison").
+
+# ---------------------------------------------------------------- extractors
+[extractors.haiku_medium]          # E6, ADOPTED: 4.6 s median, $0.0170/company, strict 90.3%, lenient 99.0%, gold 78/132
+endpoint = "openrouter"
+model = "anthropic/claude-haiku-5.5"
+reasoning = { effort = "medium" }
+max_tokens = 16000
+extra_body = { provider = { allow_fallbacks = true, require_parameters = true } }
+prompt_cache = true
+price_in = 0.10
+price_out = 0.50
+
+[extractors.haiku_off]             # E7: 2.7 s, $0.0219, strict 68.2%, lenient 95.5%, gold 38
+endpoint = "openrouter"
+model = "anthropic/claude-haiku-5.5"
+reasoning = { enabled = false }
+max_tokens = 16000
+extra_body = { provider = { allow_fallbacks = true, require_parameters = true } }
+prompt_cache = true
+price_in = 0.10
+price_out = 0.50
+
+[extractors.haiku_low]             # E8: 3.9 s, $0.0173, strict 80.7%, lenient 96.5%, gold 37
+endpoint = "openrouter"
+model = "anthropic/claude-haiku-5.5"
+reasoning = { effort = "low" }
+max_tokens = 16000
+extra_body = { provider = { allow_fallbacks = true, require_parameters = true } }
+prompt_cache = true
+price_in = 0.10
+price_out = 0.50
+
+[extractors.qwen9b_local]          # E9: 3.1 s, $0.0038 (verifier only), strict 93.4%, lenient 96.1%, gold 62 (repeat: 3.1 s, 91.1%, 63)
+endpoint = "local"
+base_url = "http://localhost:8010/v1"
+model = "Qwen/Qwen3.5-9B"
+temperature = 0
+max_tokens = 4096
+length_retry_max_tokens = 12000
+extra_body = { chat_template_kwargs = { enable_thinking = false } }
+prompt_cache = false
+price_in = 0.0
+price_out = 0.0
+
+[extractors.qwen9b_local.serve]    # = E9 serve_9b.sh (TP=2 over both RTX 3090s; TP=2 beat 2x TP=1 in the 2026-11-21 benchmark)
+gpus_per_server = 2
+gpu_memory_utilization = 0.80      # E9 used 0.90 alone; 0.80 leaves room for the Granite reranker servers (0.09 per GPU)
+args = ["--revision", "c202236235762e1c871ad0ccb60c8ee5ba337b9a", "--dtype", "bfloat16", "--tensor-parallel-size", "2",
+        "--max-model-len", "65536", "--max-num-seqs", "48", "--max-num-batched-tokens", "16384",
+        "--kernel-config", '{"enable_jit_warmup": false}',
+        "--structured-outputs-config", '{"backend":"xgrammar","disable_any_whitespace":true}',
+        "--limit-mm-per-prompt", '{"image":0,"video":0}']
+env = { HF_HUB_OFFLINE = "1" }
+
+[extractors.gemini_flash_lite]     # E10: 6.4 s, $0.0457, strict 78.0%, lenient 100%, gold 54
+endpoint = "openrouter"
+model = "google/gemini-3.1-flash-lite"
+reasoning = { effort = "medium" }
+max_tokens = 16000
+extra_body = { provider = { allow_fallbacks = true, require_parameters = true } }
+prompt_cache = true
+price_in = 0.25
+price_out = 1.50
+
+[extractors.gpt54_nano]            # E11: 7.2 s, $0.0289, strict 79.7%, lenient 96.2%, gold 51
+endpoint = "openrouter"
+model = "openai/gpt-5.4-nano"
+reasoning = { effort = "medium" }
+max_tokens = 16000
+extra_body = { provider = { allow_fallbacks = true, require_parameters = true } }
+prompt_cache = true
+price_in = 0.20
+price_out = 1.25
+
+[extractors.gpt6_luna]             # E12: 6.4 s, $0.0146, strict 94.4%, lenient 100%, gold 56
+endpoint = "openrouter"
+model = "openai/gpt-6-luna"
+reasoning = { effort = "medium" }
+max_tokens = 16000
+extra_body = { provider = { allow_fallbacks = true, require_parameters = true } }
+prompt_cache = true
+price_in = 0.10
+price_out = 0.50
+
+[extractors.terra_none]            # E13: 3.3 s, $0.1049, strict 100% (53/97 judged), gold 73
+endpoint = "openrouter"
+model = "openai/gpt-6.1-terra"
+reasoning = { effort = "none" }
+max_tokens = 16000
+extra_body = { provider = { allow_fallbacks = true, require_parameters = true } }
+prompt_cache = true
+price_in = 1.00
+price_out = 5.00
+
+[extractors.sonnet_low]            # E14: 2.8 s, $0.1453, strict 95.8% (72/108 judged), gold 80. Sonnet 5.5 rejects reasoning off/none.
+endpoint = "openrouter"
+model = "anthropic/claude-sonnet-5.5"
+reasoning = { effort = "low" }
+max_tokens = 16000
+extra_body = { provider = { allow_fallbacks = true, require_parameters = true } }
+prompt_cache = true
+price_in = 2.00
+price_out = 10.00
+
+# ---------------------------------------------------------------- verifiers
+# The verifier request is E6's (vfy_nw._send): no provider routing, max_tokens 16000. Its answers are cached on disk under
+# sha256(["vfy_nw", model, effort, message, schema]), the same key as E6, so E6's verify cache can be reused.
+
+[verifiers.terra_none]             # ADOPTED (E6): GPT-6.1 Terra, no reasoning; ~1.3 s per page call, ~$0.005 per company
+endpoint = "openrouter"
+model = "openai/gpt-6.1-terra"
+reasoning = { effort = "none" }
+max_tokens = 16000
+price_in = 1.00
+price_out = 5.00
+
+[verifiers.sonnet_medium]          # the V5 verifier as first tested (2026-11-20): same precision, slower and about 4x the cost
+endpoint = "openrouter"
+model = "anthropic/claude-sonnet-5.5"
+reasoning = { effort = "medium" }
+max_tokens = 16000
+price_in = 2.00
+price_out = 10.00

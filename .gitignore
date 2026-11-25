@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+logs/
+# run outputs and secrets never belong here
+.env
+*.env
+runs/

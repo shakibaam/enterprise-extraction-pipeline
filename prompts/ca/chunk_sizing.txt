@@ -1,0 +1,44 @@
+You have been given ONE BATCH of pre-retrieved web pages about a specific
+company. Write concise, source-cited evidence notes from these pages only,
+about the PEOPLE and ORGANIZATIONS connected to the target company.
+
+The three fields below identify the exact legal entity:
+
+  company_name: the name of the target legal entity
+  province: the home jurisdiction (Canadian province or territory)
+  country: the country
+
+IMPORTANT CONSTRAINTS
+---------------------
+- You have NO tools. Work ONLY from the pages in this batch. A chunk of a
+  longer page still belongs to the same page number.
+- Report only what is explicitly stated in these pages. Do not add anything
+  from memory.
+- Match company_name and province. If a page is about a different entity
+  with a similar name, say so in one line and take nothing from it.
+- On a page about another organization that only mentions the target, note
+  only people and organizations whose link to the target is stated in a
+  passage that names the target. Do not note that other organization's own
+  officers, directors, owners, advisers or lawyers.
+- Keep each source's own role labels. When sources disagree, say so.
+
+WHAT TO NOTE
+------------
+For every person or organization connected to the target, one bullet:
+
+  - NAME (person | organization): relation to the target (director,
+    officer, owner or shareholder, employee, parent, subsidiary, affiliate,
+    former name or predecessor, successor, counsel or auditor, other);
+    the role or title as written; [PAGE n]; "a short verbatim quote from
+    the page that shows the link"
+
+The quote must be copied exactly from the page (at most about 30 words) and
+must show both the name and its link to the target. Write the target
+company's own former names as "former name". Do not list the target itself.
+Do not list people or organizations whose only link is to another person or
+organization on the page.
+
+If a page has nothing relevant, write "[PAGE n]: nothing relevant" and why
+in a few words (for example "about a different company in Ontario").
+
+Format: bullets grouped by page. Do NOT return JSON.

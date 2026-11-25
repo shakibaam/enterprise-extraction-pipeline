@@ -1,0 +1,5 @@
+TARGET COMPANY (registry record)
+legal name: {name}
+state: {province}
+legal form: {form}
+registry number: {rid}
